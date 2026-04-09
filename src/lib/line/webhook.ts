@@ -44,6 +44,30 @@ type CustomerUpsertRecord = {
   last_message_at: string;
 };
 
+type CustomerRecord = {
+  id: string;
+  shop_id: string;
+  line_user_id: string;
+};
+
+type OrderDraftInsert = {
+  shop_id: string;
+  customer_id: string;
+  line_channel_id: string;
+  order_number: string;
+  source: "line_chat";
+  status: "new";
+  payment_status: "pending";
+  fulfillment_status: "unfulfilled";
+  notes: string;
+  currency: "THB";
+  subtotal_amount: number;
+  discount_amount: number;
+  shipping_amount: number;
+  total_amount: number;
+  placed_at: string;
+};
+
 export function verifyLineSignature(rawBody: string, signature: string, secret: string) {
   return validateSignature(rawBody, secret, signature);
 }
@@ -167,6 +191,89 @@ async function markWebhookEventsProcessed(
   }
 }
 
+function isTextMessageEvent(event: LineWebhookEvent) {
+  return event.type === "message" && event.message?.type === "text";
+}
+
+async function findCustomersByLineUserIds(
+  lineChannel: LineChannelRecord | null,
+  lineUserIds: string[],
+) {
+  if (!lineChannel || lineUserIds.length === 0) {
+    return new Map<string, CustomerRecord>();
+  }
+
+  const supabase = createAdminSupabaseClient();
+  const { data, error } = await supabase
+    .from("customers")
+    .select("id, shop_id, line_user_id")
+    .eq("shop_id", lineChannel.shop_id)
+    .in("line_user_id", lineUserIds);
+
+  if (error) {
+    throw new Error(`Failed to load LINE customers: ${error.message}`);
+  }
+
+  const customerMap = new Map<string, CustomerRecord>();
+
+  for (const customer of (data ?? []) as CustomerRecord[]) {
+    customerMap.set(customer.line_user_id, customer);
+  }
+
+  return customerMap;
+}
+
+function buildOrderDraftRecords(
+  events: LineWebhookEvent[],
+  lineChannel: LineChannelRecord | null,
+  customersByLineUserId: Map<string, CustomerRecord>,
+) {
+  if (!lineChannel) {
+    return [];
+  }
+
+  const records: OrderDraftInsert[] = [];
+
+  for (const event of events) {
+    if (!isTextMessageEvent(event)) {
+      continue;
+    }
+
+    const lineUserId = event.source?.userId;
+    const messageText = event.message?.text?.trim();
+
+    if (!lineUserId || !messageText) {
+      continue;
+    }
+
+    const customer = customersByLineUserId.get(lineUserId);
+
+    if (!customer) {
+      continue;
+    }
+
+    records.push({
+      shop_id: lineChannel.shop_id,
+      customer_id: customer.id,
+      line_channel_id: lineChannel.id,
+      order_number: `DRAFT-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`,
+      source: "line_chat",
+      status: "new",
+      payment_status: "pending",
+      fulfillment_status: "unfulfilled",
+      notes: messageText,
+      currency: "THB",
+      subtotal_amount: 0,
+      discount_amount: 0,
+      shipping_amount: 0,
+      total_amount: 0,
+      placed_at: getEventTimestamp(event),
+    });
+  }
+
+  return records;
+}
+
 export async function persistLineWebhookEvents(
   body: LineWebhookBody,
   channelSecret: string,
@@ -219,16 +326,60 @@ export async function upsertLineCustomers(
   return { count: customerRecords.length };
 }
 
+export async function createOrderDraftsFromLineMessages(
+  body: LineWebhookBody,
+  lineChannel: LineChannelRecord | null,
+) {
+  if (!lineChannel) {
+    return { count: 0 };
+  }
+
+  const lineUserIds = Array.from(
+    new Set(
+      body.events
+        .map((event) => event.source?.userId)
+        .filter((lineUserId): lineUserId is string => Boolean(lineUserId)),
+    ),
+  );
+  const customersByLineUserId = await findCustomersByLineUserIds(
+    lineChannel,
+    lineUserIds,
+  );
+  const draftRecords = buildOrderDraftRecords(
+    body.events,
+    lineChannel,
+    customersByLineUserId,
+  );
+
+  if (draftRecords.length === 0) {
+    return { count: 0 };
+  }
+
+  const supabase = createAdminSupabaseClient();
+  const { error } = await supabase.from("orders").insert(draftRecords);
+
+  if (error) {
+    throw new Error(`Failed to create order drafts: ${error.message}`);
+  }
+
+  return { count: draftRecords.length };
+}
+
 export async function processLineWebhook(body: LineWebhookBody, channelSecret: string) {
   const persisted = await persistLineWebhookEvents(body, channelSecret);
 
   try {
     const customers = await upsertLineCustomers(body, persisted.lineChannel);
+    const orders = await createOrderDraftsFromLineMessages(
+      body,
+      persisted.lineChannel,
+    );
     await markWebhookEventsProcessed(persisted.insertedEvents);
 
     return {
       received: persisted.count,
       customersUpserted: customers.count,
+      orderDraftsCreated: orders.count,
     };
   } catch (error) {
     const message =

@@ -49,6 +49,7 @@ export async function POST(request: Request) {
       ok: true,
       received: result.received,
       customersUpserted: result.customersUpserted,
+      orderDraftsCreated: result.orderDraftsCreated,
     });
   } catch (error) {
     const message =

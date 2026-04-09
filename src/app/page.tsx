@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 export default function Home() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-stone-100 px-6 py-16 text-stone-950">
@@ -17,6 +19,20 @@ export default function Home() {
                 implementation without guessing structure later.
               </p>
             </div>
+            <div className="flex flex-wrap gap-3">
+              <Link
+                href="/dashboard/orders"
+                className="rounded-full bg-stone-950 px-5 py-2 text-sm font-medium text-stone-50 transition hover:bg-stone-700"
+              >
+                Open orders dashboard
+              </Link>
+              <Link
+                href="/api/webhooks/line"
+                className="rounded-full border border-stone-300 px-5 py-2 text-sm font-medium text-stone-700 transition hover:border-stone-900 hover:text-stone-950"
+              >
+                Check webhook route
+              </Link>
+            </div>
           </div>
 
           <div className="rounded-[28px] bg-stone-950 p-6 text-stone-50">
@@ -24,9 +40,9 @@ export default function Home() {
             <ol className="mt-4 space-y-3 text-sm leading-7 text-stone-300">
               <li>1. Fill in the environment variables from `.env.example`.</li>
               <li>2. Apply the initial schema in Supabase.</li>
-              <li>3. Build the LINE webhook route.</li>
-              <li>4. Save incoming events into `line_webhook_events`.</li>
-              <li>5. Upsert customers and create orders.</li>
+              <li>3. Connect LINE OA to the deployed webhook URL.</li>
+              <li>4. Send a test message from LINE.</li>
+              <li>5. Open the orders dashboard to verify draft rows appear.</li>
             </ol>
           </div>
         </div>
