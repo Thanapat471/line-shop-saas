@@ -50,6 +50,7 @@ export async function POST(request: Request) {
       received: result.received,
       customersUpserted: result.customersUpserted,
       orderDraftsCreated: result.orderDraftsCreated,
+      intentCounts: result.intentCounts,
     });
   } catch (error) {
     const message =

@@ -34,9 +34,10 @@ Everything else is currently treated as `chat`.
 
 ## Effect On The System
 
-- `chat` messages are stored in `line_webhook_events` only
-- `inquiry` messages are stored in `line_webhook_events` only
+- `chat` messages are stored in `line_webhook_events` with `message_intent = chat`
+- `inquiry` messages are stored in `line_webhook_events` with `message_intent = inquiry`
 - `order_intent` messages create draft rows in `orders`
+- `order_intent` messages are also stored in `line_webhook_events` with `message_intent = order_intent`
 
 ## Why This Is The Right Next Step
 
@@ -46,6 +47,6 @@ Everything else is currently treated as `chat`.
 
 ## Recommended Next Step
 
-1. store the detected intent explicitly for each message
-2. add order status update actions
-3. send LINE replies from the app instead of relying on OA auto-replies
+1. add order status update actions
+2. send LINE replies from the app instead of relying on OA auto-replies
+3. later map `order_intent` messages into structured `order_items`

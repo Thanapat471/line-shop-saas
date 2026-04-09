@@ -37,6 +37,8 @@ type InsertedWebhookEventRecord = {
   event_id: string | null;
 };
 
+type MessageIntentCounts = Record<MessageIntent, number>;
+
 type CustomerUpsertRecord = {
   shop_id: string;
   line_channel_id: string;
@@ -164,6 +166,40 @@ export function classifyMessageIntent(messageText: string): MessageIntent {
   return "chat";
 }
 
+function classifyWebhookEventIntent(event: LineWebhookEvent): MessageIntent | null {
+  if (!isTextMessageEvent(event)) {
+    return null;
+  }
+
+  const messageText = event.message?.text?.trim();
+
+  if (!messageText) {
+    return "chat";
+  }
+
+  return classifyMessageIntent(messageText);
+}
+
+function buildIntentCounts(events: LineWebhookEvent[]): MessageIntentCounts {
+  const counts: MessageIntentCounts = {
+    chat: 0,
+    inquiry: 0,
+    order_intent: 0,
+  };
+
+  for (const event of events) {
+    const intent = classifyWebhookEventIntent(event);
+
+    if (!intent) {
+      continue;
+    }
+
+    counts[intent] += 1;
+  }
+
+  return counts;
+}
+
 function buildWebhookInsertRecord(
   event: LineWebhookEvent,
   rawBody: LineWebhookBody,
@@ -180,6 +216,7 @@ function buildWebhookInsertRecord(
     reply_token: event.replyToken ?? null,
     message_type: event.message?.type ?? null,
     message_text: event.message?.text ?? null,
+    message_intent: classifyWebhookEventIntent(event),
     raw_body: {
       destination: rawBody.destination ?? null,
       event,
@@ -430,6 +467,7 @@ export async function createOrderDraftsFromLineMessages(
 
 export async function processLineWebhook(body: LineWebhookBody, channelSecret: string) {
   const persisted = await persistLineWebhookEvents(body, channelSecret);
+  const intentCounts = buildIntentCounts(body.events);
 
   try {
     const customers = await upsertLineCustomers(body, persisted.lineChannel);
@@ -443,6 +481,7 @@ export async function processLineWebhook(body: LineWebhookBody, channelSecret: s
       received: persisted.count,
       customersUpserted: customers.count,
       orderDraftsCreated: orders.count,
+      intentCounts,
     };
   } catch (error) {
     const message =

@@ -85,6 +85,7 @@ create table public.line_webhook_events (
   reply_token text,
   message_type text,
   message_text text,
+  message_intent text check (message_intent in ('chat', 'inquiry', 'order_intent')),
   raw_body jsonb not null default '{}'::jsonb,
   received_at timestamptz not null default now(),
   processed_at timestamptz,
