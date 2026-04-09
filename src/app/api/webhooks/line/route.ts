@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getRequiredLineEnv } from "@/lib/env";
 import {
   parseLineWebhookBody,
-  persistLineWebhookEvents,
+  processLineWebhook,
   verifyLineSignature,
 } from "@/lib/line/webhook";
 
@@ -43,11 +43,12 @@ export async function POST(request: Request) {
 
   try {
     const body = parseLineWebhookBody(rawBody);
-    const result = await persistLineWebhookEvents(body, lineChannelSecret);
+    const result = await processLineWebhook(body, lineChannelSecret);
 
     return NextResponse.json({
       ok: true,
-      received: result.count,
+      received: result.received,
+      customersUpserted: result.customersUpserted,
     });
   } catch (error) {
     const message =
