@@ -68,6 +68,35 @@ type OrderDraftInsert = {
   placed_at: string;
 };
 
+type MessageIntent = "chat" | "inquiry" | "order_intent";
+
+const ORDER_INTENT_KEYWORDS = [
+  "สั่ง",
+  "เอา",
+  "รับ",
+  "ซื้อ",
+  "cf",
+  "จอง",
+  "สนใจสั่ง",
+  "ขอพรีออเดอร์",
+  "preorder",
+  "order",
+] as const;
+
+const INQUIRY_KEYWORDS = [
+  "ราคา",
+  "เท่าไหร่",
+  "มีไหม",
+  "มีของไหม",
+  "ส่งยังไง",
+  "ส่งได้ไหม",
+  "ไซซ์",
+  "สีอะไร",
+  "รายละเอียด",
+  "โปร",
+  "ค่าส่ง",
+] as const;
+
 export function verifyLineSignature(rawBody: string, signature: string, secret: string) {
   return validateSignature(rawBody, secret, signature);
 }
@@ -105,6 +134,34 @@ function getEventTimestamp(event: LineWebhookEvent) {
   return typeof event.timestamp === "number"
     ? new Date(event.timestamp).toISOString()
     : new Date().toISOString();
+}
+
+export function classifyMessageIntent(messageText: string): MessageIntent {
+  const normalized = messageText.trim().toLowerCase();
+
+  if (!normalized) {
+    return "chat";
+  }
+
+  const hasOrderKeyword = ORDER_INTENT_KEYWORDS.some((keyword) =>
+    normalized.includes(keyword),
+  );
+  const hasInquiryKeyword = INQUIRY_KEYWORDS.some((keyword) =>
+    normalized.includes(keyword),
+  );
+  const hasQuantityPattern =
+    /\b\d+\b/.test(normalized) ||
+    /[0-9]+ ?(ชิ้น|ตัว|อัน|กล่อง|แพ็ก|คู่|ชุด|kg|โล|ใบ)/i.test(normalized);
+
+  if (hasOrderKeyword || (hasQuantityPattern && normalized.length >= 6)) {
+    return "order_intent";
+  }
+
+  if (hasInquiryKeyword) {
+    return "inquiry";
+  }
+
+  return "chat";
 }
 
 function buildWebhookInsertRecord(
@@ -243,6 +300,12 @@ function buildOrderDraftRecords(
     const messageText = event.message?.text?.trim();
 
     if (!lineUserId || !messageText) {
+      continue;
+    }
+
+    const intent = classifyMessageIntent(messageText);
+
+    if (intent !== "order_intent") {
       continue;
     }
 
