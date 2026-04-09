@@ -34,3 +34,10 @@ export function getServerEnv() {
     lineChannelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
   };
 }
+
+export function getRequiredLineEnv() {
+  return {
+    lineChannelSecret: readEnv("LINE_CHANNEL_SECRET"),
+    lineChannelAccessToken: readEnv("LINE_CHANNEL_ACCESS_TOKEN"),
+  };
+}
