@@ -1,12 +1,24 @@
 import "server-only";
 
 import { createClient } from "@supabase/supabase-js";
+import { createServerClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
 import { getPublicEnv, getServerEnv } from "@/lib/env";
 
-export function createServerSupabaseClient() {
+export async function createAuthSupabaseClient() {
   const { supabaseUrl, supabaseAnonKey } = getPublicEnv();
+  const cookieStore = await cookies();
 
-  return createClient(supabaseUrl, supabaseAnonKey);
+  return createServerClient(supabaseUrl, supabaseAnonKey, {
+    cookies: {
+      getAll: () => cookieStore.getAll(),
+      setAll: (cookiesToSet) => {
+        for (const { name, value, options } of cookiesToSet) {
+          cookieStore.set(name, value, options);
+        }
+      },
+    },
+  });
 }
 
 export function createAdminSupabaseClient() {

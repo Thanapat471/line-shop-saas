@@ -1,4 +1,4 @@
-import { validateSignature } from "@line/bot-sdk";
+import { messagingApi, validateSignature } from "@line/bot-sdk";
 import { createAdminSupabaseClient } from "@/lib/supabase/server";
 
 type LineWebhookSource = {
@@ -30,6 +30,7 @@ export type LineWebhookBody = {
 type LineChannelRecord = {
   id: string;
   shop_id: string;
+  channel_access_token: string;
 };
 
 type InsertedWebhookEventRecord = {
@@ -44,6 +45,9 @@ type CustomerUpsertRecord = {
   line_channel_id: string;
   line_user_id: string;
   last_message_at: string;
+  line_display_name?: string;
+  picture_url?: string;
+  language?: string;
 };
 
 type CustomerRecord = {
@@ -68,6 +72,31 @@ type OrderDraftInsert = {
   shipping_amount: number;
   total_amount: number;
   placed_at: string;
+};
+
+type ProductRecord = {
+  id: string;
+  name: string;
+  sku: string | null;
+  price_amount: number;
+};
+
+type OrderItemInsert = {
+  order_id: string;
+  product_id: string;
+  product_name_snapshot: string;
+  sku_snapshot: string | null;
+  unit_price_amount: number;
+  quantity: number;
+  line_total_amount: number;
+};
+
+type OrderDraftWithItems = {
+  draft: OrderDraftInsert;
+  items: Array<{
+    product: ProductRecord;
+    quantity: number;
+  }>;
 };
 
 type MessageIntent = "chat" | "inquiry" | "order_intent";
@@ -103,6 +132,30 @@ export function verifyLineSignature(rawBody: string, signature: string, secret: 
   return validateSignature(rawBody, secret, signature);
 }
 
+const REPLY_MESSAGES: Record<MessageIntent, string | null> = {
+  order_intent: "รับออเดอร์แล้วค่ะ ทีมงานจะติดต่อกลับเพื่อยืนยันออเดอร์เร็วๆ นี้นะคะ",
+  inquiry: "ขอบคุณที่สอบถามนะคะ ทีมงานจะตอบกลับเร็วๆ นี้ค่ะ",
+  chat: null,
+};
+
+async function sendLineReply(
+  replyToken: string,
+  intent: MessageIntent,
+  accessToken: string,
+) {
+  const text = REPLY_MESSAGES[intent];
+
+  if (!text) {
+    return;
+  }
+
+  const client = new messagingApi.MessagingApiClient({ channelAccessToken: accessToken });
+  await client.replyMessage({
+    replyToken,
+    messages: [{ type: "text", text }],
+  });
+}
+
 export function parseLineWebhookBody(rawBody: string): LineWebhookBody {
   const parsedBody = JSON.parse(rawBody) as Partial<LineWebhookBody>;
 
@@ -120,7 +173,7 @@ async function findLineChannelBySecret(secret: string): Promise<LineChannelRecor
   const supabase = createAdminSupabaseClient();
   const { data, error } = await supabase
     .from("line_channels")
-    .select("id, shop_id")
+    .select("id, shop_id, channel_access_token")
     .eq("channel_secret", secret)
     .eq("is_active", true)
     .maybeSingle<LineChannelRecord>();
@@ -254,6 +307,32 @@ function buildCustomerUpsertRecords(
   return Array.from(dedupedRecords.values());
 }
 
+async function fetchLineUserProfiles(
+  lineUserIds: string[],
+  accessToken: string,
+): Promise<Map<string, { displayName: string; pictureUrl?: string; language?: string }>> {
+  const client = new messagingApi.MessagingApiClient({ channelAccessToken: accessToken });
+
+  const results = await Promise.allSettled(
+    lineUserIds.map((userId) => client.getProfile(userId).then((p) => ({ userId, profile: p }))),
+  );
+
+  const profileMap = new Map<string, { displayName: string; pictureUrl?: string; language?: string }>();
+
+  for (const result of results) {
+    if (result.status === "fulfilled") {
+      const { userId, profile } = result.value;
+      profileMap.set(userId, {
+        displayName: profile.displayName,
+        pictureUrl: profile.pictureUrl,
+        language: profile.language,
+      });
+    }
+  }
+
+  return profileMap;
+}
+
 async function markWebhookEventsProcessed(
   insertedEvents: InsertedWebhookEventRecord[],
   errorMessage?: string,
@@ -289,6 +368,61 @@ function isTextMessageEvent(event: LineWebhookEvent) {
   return event.type === "message" && event.message?.type === "text";
 }
 
+async function fetchShopProducts(shopId: string): Promise<ProductRecord[]> {
+  const supabase = createAdminSupabaseClient();
+  const { data, error } = await supabase
+    .from("products")
+    .select("id, name, sku, price_amount")
+    .eq("shop_id", shopId)
+    .eq("is_active", true);
+
+  if (error) {
+    throw new Error(`Failed to fetch products: ${error.message}`);
+  }
+
+  return (data ?? []) as ProductRecord[];
+}
+
+function extractQuantityFromText(text: string): number {
+  const unitPattern = /(\d+)\s*(ชิ้น|ตัว|อัน|กล่อง|แพ็ก|คู่|ชุด|kg|โล|ใบ)/i;
+  const unitMatch = unitPattern.exec(text);
+  if (unitMatch) {
+    return parseInt(unitMatch[1], 10);
+  }
+
+  const numberMatch = /\b(\d+)\b/.exec(text);
+  if (numberMatch) {
+    const n = parseInt(numberMatch[1], 10);
+    if (n >= 1 && n <= 999) {
+      return n;
+    }
+  }
+
+  return 1;
+}
+
+function matchProductsInText(
+  text: string,
+  products: ProductRecord[],
+): Array<{ product: ProductRecord; quantity: number }> {
+  const normalized = text.toLowerCase();
+  const quantity = extractQuantityFromText(text);
+  const matched: Array<{ product: ProductRecord; quantity: number }> = [];
+
+  for (const product of products) {
+    const nameMatch = normalized.includes(product.name.toLowerCase());
+    const skuMatch = product.sku
+      ? normalized.includes(product.sku.toLowerCase())
+      : false;
+
+    if (nameMatch || skuMatch) {
+      matched.push({ product, quantity });
+    }
+  }
+
+  return matched;
+}
+
 async function findCustomersByLineUserIds(
   lineChannel: LineChannelRecord | null,
   lineUserIds: string[],
@@ -317,16 +451,17 @@ async function findCustomersByLineUserIds(
   return customerMap;
 }
 
-function buildOrderDraftRecords(
+function buildOrderDraftWithItems(
   events: LineWebhookEvent[],
   lineChannel: LineChannelRecord | null,
   customersByLineUserId: Map<string, CustomerRecord>,
-) {
+  products: ProductRecord[],
+): OrderDraftWithItems[] {
   if (!lineChannel) {
     return [];
   }
 
-  const records: OrderDraftInsert[] = [];
+  const results: OrderDraftWithItems[] = [];
 
   for (const event of events) {
     if (!isTextMessageEvent(event)) {
@@ -340,9 +475,7 @@ function buildOrderDraftRecords(
       continue;
     }
 
-    const intent = classifyMessageIntent(messageText);
-
-    if (intent !== "order_intent") {
+    if (classifyMessageIntent(messageText) !== "order_intent") {
       continue;
     }
 
@@ -352,26 +485,35 @@ function buildOrderDraftRecords(
       continue;
     }
 
-    records.push({
-      shop_id: lineChannel.shop_id,
-      customer_id: customer.id,
-      line_channel_id: lineChannel.id,
-      order_number: `DRAFT-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`,
-      source: "line_chat",
-      status: "new",
-      payment_status: "pending",
-      fulfillment_status: "unfulfilled",
-      notes: messageText,
-      currency: "THB",
-      subtotal_amount: 0,
-      discount_amount: 0,
-      shipping_amount: 0,
-      total_amount: 0,
-      placed_at: getEventTimestamp(event),
+    const matchedItems = matchProductsInText(messageText, products);
+    const subtotal = matchedItems.reduce(
+      (sum, { product, quantity }) => sum + product.price_amount * quantity,
+      0,
+    );
+
+    results.push({
+      draft: {
+        shop_id: lineChannel.shop_id,
+        customer_id: customer.id,
+        line_channel_id: lineChannel.id,
+        order_number: `DRAFT-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`,
+        source: "line_chat",
+        status: "new",
+        payment_status: "pending",
+        fulfillment_status: "unfulfilled",
+        notes: messageText,
+        currency: "THB",
+        subtotal_amount: subtotal,
+        discount_amount: 0,
+        shipping_amount: 0,
+        total_amount: subtotal,
+        placed_at: getEventTimestamp(event),
+      },
+      items: matchedItems,
     });
   }
 
-  return records;
+  return results;
 }
 
 export async function persistLineWebhookEvents(
@@ -414,8 +556,24 @@ export async function upsertLineCustomers(
     return { count: 0 };
   }
 
+  const lineUserIds = customerRecords.map((r) => r.line_user_id);
+  const profiles = lineChannel
+    ? await fetchLineUserProfiles(lineUserIds, lineChannel.channel_access_token)
+    : new Map();
+
+  const recordsWithProfiles = customerRecords.map((record) => {
+    const profile = profiles.get(record.line_user_id);
+    if (!profile) return record;
+    return {
+      ...record,
+      line_display_name: profile.displayName,
+      picture_url: profile.pictureUrl,
+      language: profile.language,
+    };
+  });
+
   const supabase = createAdminSupabaseClient();
-  const { error } = await supabase.from("customers").upsert(customerRecords, {
+  const { error } = await supabase.from("customers").upsert(recordsWithProfiles, {
     onConflict: "shop_id,line_user_id",
   });
 
@@ -441,31 +599,84 @@ export async function createOrderDraftsFromLineMessages(
         .filter((lineUserId): lineUserId is string => Boolean(lineUserId)),
     ),
   );
-  const customersByLineUserId = await findCustomersByLineUserIds(
-    lineChannel,
-    lineUserIds,
-  );
-  const draftRecords = buildOrderDraftRecords(
+
+  const [customersByLineUserId, products] = await Promise.all([
+    findCustomersByLineUserIds(lineChannel, lineUserIds),
+    fetchShopProducts(lineChannel.shop_id),
+  ]);
+
+  const draftsWithItems = buildOrderDraftWithItems(
     body.events,
     lineChannel,
     customersByLineUserId,
+    products,
   );
 
-  if (draftRecords.length === 0) {
+  if (draftsWithItems.length === 0) {
     return { count: 0 };
   }
 
   const supabase = createAdminSupabaseClient();
-  const { error } = await supabase.from("orders").insert(draftRecords);
+  const { data: insertedOrders, error: ordersError } = await supabase
+    .from("orders")
+    .insert(draftsWithItems.map(({ draft }) => draft))
+    .select("id");
 
-  if (error) {
-    throw new Error(`Failed to create order drafts: ${error.message}`);
+  if (ordersError) {
+    throw new Error(`Failed to create order drafts: ${ordersError.message}`);
   }
 
-  return { count: draftRecords.length };
+  const orderItems: OrderItemInsert[] = (insertedOrders ?? []).flatMap(
+    (order, i) => {
+      const { items } = draftsWithItems[i];
+      return items.map(({ product, quantity }) => ({
+        order_id: order.id,
+        product_id: product.id,
+        product_name_snapshot: product.name,
+        sku_snapshot: product.sku,
+        unit_price_amount: product.price_amount,
+        quantity,
+        line_total_amount: product.price_amount * quantity,
+      }));
+    },
+  );
+
+  if (orderItems.length > 0) {
+    const { error: itemsError } = await supabase
+      .from("order_items")
+      .insert(orderItems);
+
+    if (itemsError) {
+      throw new Error(`Failed to create order items: ${itemsError.message}`);
+    }
+  }
+
+  return { count: draftsWithItems.length };
 }
 
-export async function processLineWebhook(body: LineWebhookBody, channelSecret: string) {
+async function replyToTextMessageEvents(
+  events: LineWebhookEvent[],
+  lineChannel: LineChannelRecord | null,
+) {
+  if (!lineChannel) {
+    return;
+  }
+
+  const replies = events
+    .filter(isTextMessageEvent)
+    .filter((event) => event.replyToken)
+    .map((event) => {
+      const intent = classifyMessageIntent(event.message!.text!.trim());
+      return sendLineReply(event.replyToken!, intent, lineChannel.channel_access_token);
+    });
+
+  await Promise.allSettled(replies);
+}
+
+export async function processLineWebhook(
+  body: LineWebhookBody,
+  channelSecret: string,
+) {
   const persisted = await persistLineWebhookEvents(body, channelSecret);
   const intentCounts = buildIntentCounts(body.events);
 
@@ -476,6 +687,7 @@ export async function processLineWebhook(body: LineWebhookBody, channelSecret: s
       persisted.lineChannel,
     );
     await markWebhookEventsProcessed(persisted.insertedEvents);
+    await replyToTextMessageEvents(body.events, persisted.lineChannel);
 
     return {
       received: persisted.count,

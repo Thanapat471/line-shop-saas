@@ -14,6 +14,7 @@ type OrderRow = {
   placed_at: string;
   customers: Array<{
     line_user_id: string;
+    line_display_name: string | null;
   }> | null;
 };
 
@@ -58,7 +59,7 @@ async function loadOrders() {
     const { data, error } = await supabase
       .from("orders")
       .select(
-        "id, order_number, status, notes, total_amount, currency, placed_at, customers(line_user_id)",
+        "id, order_number, status, notes, total_amount, currency, placed_at, customers(line_user_id, line_display_name)",
       )
       .order("placed_at", { ascending: false })
       .limit(50);
@@ -170,17 +171,22 @@ export default async function OrdersDashboardPage() {
                 </thead>
                 <tbody className="divide-y divide-stone-100 bg-white">
                   {orders.map((order) => (
-                    <tr key={order.id} className="align-top">
+                    <tr key={order.id} className="align-top hover:bg-stone-50 transition-colors">
                       <td className="px-6 py-5">
-                        <div className="font-medium text-stone-950">
+                        <Link
+                          href={`/dashboard/orders/${order.id}`}
+                          className="font-medium text-stone-950 hover:underline"
+                        >
                           {order.order_number}
-                        </div>
+                        </Link>
                         <div className="mt-1 text-xs text-stone-500">
                           {order.id}
                         </div>
                       </td>
                       <td className="px-6 py-5 text-sm text-stone-700">
-                        {order.customers?.[0]?.line_user_id ?? "Unknown LINE user"}
+                        {order.customers?.[0]?.line_display_name ??
+                          order.customers?.[0]?.line_user_id ??
+                          "Unknown"}
                       </td>
                       <td className="max-w-sm px-6 py-5 text-sm leading-7 text-stone-600">
                         {order.notes ?? "-"}
