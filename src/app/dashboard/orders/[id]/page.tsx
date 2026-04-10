@@ -1,28 +1,22 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { ChevronLeft } from "lucide-react";
 import { createAdminSupabaseClient } from "@/lib/supabase/server";
+import { updateOrderStatus } from "./actions";
 import { StatusForm } from "./StatusForm";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-function statusClasses(status: string) {
-  switch (status) {
-    case "completed":
-      return "bg-emerald-100 text-emerald-800";
-    case "processing":
-    case "paid":
-      return "bg-amber-100 text-amber-800";
-    case "shipped":
-      return "bg-sky-100 text-sky-800";
-    case "cancelled":
-      return "bg-rose-100 text-rose-800";
-    case "waiting_payment":
-      return "bg-violet-100 text-violet-800";
-    default:
-      return "bg-stone-200 text-stone-700";
-  }
-}
+const STATUS_STYLES: Record<string, string> = {
+  completed: "bg-emerald-100 text-emerald-700",
+  processing: "bg-amber-100 text-amber-700",
+  paid: "bg-amber-100 text-amber-700",
+  shipped: "bg-sky-100 text-sky-700",
+  cancelled: "bg-rose-100 text-rose-700",
+  waiting_payment: "bg-violet-100 text-violet-700",
+  new: "bg-stone-100 text-stone-600",
+};
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("th-TH", {
@@ -33,8 +27,7 @@ function formatDate(value: string) {
 
 async function loadOrder(id: string) {
   const supabase = createAdminSupabaseClient();
-
-  const { data, error } = await supabase
+  const { data } = await supabase
     .from("orders")
     .select(
       `id, order_number, status, payment_status, notes,
@@ -46,7 +39,6 @@ async function loadOrder(id: string) {
     .eq("id", id)
     .single();
 
-  if (error || !data) return null;
   return data;
 }
 
@@ -57,7 +49,6 @@ export default async function OrderDetailPage({
 }) {
   const { id } = await params;
   const order = await loadOrder(id);
-
   if (!order) notFound();
 
   const customer = Array.isArray(order.customers)
@@ -68,145 +59,149 @@ export default async function OrderDetailPage({
     customer?.line_display_name ?? customer?.line_user_id ?? "ไม่ทราบชื่อ";
 
   return (
-    <main className="min-h-screen bg-stone-100 px-6 py-10 text-stone-950">
-      <div className="mx-auto flex w-full max-w-4xl flex-col gap-6">
-        {/* Back + header */}
-        <div className="flex items-center gap-3">
-          <Link
-            href="/dashboard/orders"
-            className="rounded-full border border-stone-300 px-4 py-1.5 text-sm font-medium text-stone-700 transition hover:border-stone-900 hover:text-stone-950"
-          >
-            ← กลับ
-          </Link>
-          <h1 className="text-xl font-semibold">{order.order_number}</h1>
-          <span
-            className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${statusClasses(order.status)}`}
-          >
-            {order.status}
-          </span>
+    <div className="p-8">
+      {/* Back + title */}
+      <div className="mb-8 flex items-center gap-4">
+        <Link
+          href="/dashboard/orders"
+          className="flex h-9 w-9 items-center justify-center rounded-xl border border-stone-200 bg-white text-stone-500 transition hover:border-stone-400 hover:text-stone-900"
+        >
+          <ChevronLeft size={18} />
+        </Link>
+        <div>
+          <div className="flex items-center gap-3">
+            <h1 className="text-xl font-bold text-stone-950">
+              {order.order_number}
+            </h1>
+            <span
+              className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_STYLES[order.status] ?? "bg-stone-100 text-stone-600"}`}
+            >
+              {order.status}
+            </span>
+          </div>
+          <p className="mt-0.5 text-sm text-stone-400">
+            {formatDate(order.placed_at)}
+          </p>
         </div>
+      </div>
 
-        <div className="grid gap-6 lg:grid-cols-3">
-          {/* Left column: items + summary */}
-          <div className="flex flex-col gap-6 lg:col-span-2">
-            {/* Order items */}
-            <section className="overflow-hidden rounded-[24px] border border-stone-200 bg-white shadow-[0_8px_32px_rgba(28,25,23,0.06)]">
-              <div className="border-b border-stone-200 px-6 py-4">
-                <h2 className="font-semibold">สินค้าในออเดอร์</h2>
-              </div>
-              {order.order_items.length === 0 ? (
-                <p className="px-6 py-8 text-center text-sm text-stone-500">
-                  ไม่มีรายการสินค้า
-                </p>
-              ) : (
-                <table className="min-w-full divide-y divide-stone-100">
-                  <thead className="bg-stone-50 text-left text-xs text-stone-500">
-                    <tr>
-                      <th className="px-6 py-3 font-medium">สินค้า</th>
-                      <th className="px-6 py-3 font-medium">SKU</th>
-                      <th className="px-6 py-3 font-medium text-right">ราคา/ชิ้น</th>
-                      <th className="px-6 py-3 font-medium text-right">จำนวน</th>
-                      <th className="px-6 py-3 font-medium text-right">รวม</th>
+      <div className="grid gap-6 lg:grid-cols-3">
+        {/* Left */}
+        <div className="flex flex-col gap-6 lg:col-span-2">
+          {/* Items */}
+          <div className="overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm">
+            <div className="border-b border-stone-100 px-6 py-4">
+              <h2 className="font-semibold text-stone-900">สินค้าในออเดอร์</h2>
+            </div>
+            {order.order_items.length === 0 ? (
+              <p className="py-10 text-center text-sm text-stone-400">
+                ไม่มีรายการสินค้า
+              </p>
+            ) : (
+              <>
+                <table className="min-w-full">
+                  <thead>
+                    <tr className="border-b border-stone-100 bg-stone-50 text-left text-xs font-medium text-stone-400">
+                      <th className="px-6 py-3">สินค้า</th>
+                      <th className="px-6 py-3">SKU</th>
+                      <th className="px-6 py-3 text-right">ราคา/ชิ้น</th>
+                      <th className="px-6 py-3 text-right">จำนวน</th>
+                      <th className="px-6 py-3 text-right">รวม</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-stone-100">
                     {order.order_items.map((item) => (
                       <tr key={item.id}>
-                        <td className="px-6 py-4 text-sm font-medium text-stone-950">
+                        <td className="px-6 py-4 font-medium text-stone-900">
                           {item.product_name_snapshot}
                         </td>
-                        <td className="px-6 py-4 text-sm text-stone-500">
+                        <td className="px-6 py-4 font-mono text-xs text-stone-400">
                           {item.sku_snapshot ?? "-"}
                         </td>
-                        <td className="px-6 py-4 text-sm text-right text-stone-700">
-                          {Number(item.unit_price_amount).toFixed(2)}
+                        <td className="px-6 py-4 text-right text-sm text-stone-600">
+                          ฿{Number(item.unit_price_amount).toFixed(2)}
                         </td>
-                        <td className="px-6 py-4 text-sm text-right text-stone-700">
+                        <td className="px-6 py-4 text-right text-sm text-stone-600">
                           {item.quantity}
                         </td>
-                        <td className="px-6 py-4 text-sm text-right font-medium text-stone-950">
-                          {Number(item.line_total_amount).toFixed(2)}
+                        <td className="px-6 py-4 text-right font-semibold text-stone-900">
+                          ฿{Number(item.line_total_amount).toFixed(2)}
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
-              )}
-              {/* Summary */}
-              <div className="border-t border-stone-200 px-6 py-4 space-y-1.5 text-sm">
-                <div className="flex justify-between text-stone-600">
-                  <span>ยอดสินค้า</span>
-                  <span>{Number(order.subtotal_amount).toFixed(2)}</span>
-                </div>
-                {Number(order.discount_amount) > 0 && (
-                  <div className="flex justify-between text-rose-600">
-                    <span>ส่วนลด</span>
-                    <span>-{Number(order.discount_amount).toFixed(2)}</span>
+                <div className="space-y-2 border-t border-stone-100 px-6 py-4 text-sm">
+                  <div className="flex justify-between text-stone-500">
+                    <span>ยอดสินค้า</span>
+                    <span>฿{Number(order.subtotal_amount).toFixed(2)}</span>
                   </div>
-                )}
-                {Number(order.shipping_amount) > 0 && (
-                  <div className="flex justify-between text-stone-600">
-                    <span>ค่าจัดส่ง</span>
-                    <span>{Number(order.shipping_amount).toFixed(2)}</span>
+                  {Number(order.discount_amount) > 0 && (
+                    <div className="flex justify-between text-rose-600">
+                      <span>ส่วนลด</span>
+                      <span>-฿{Number(order.discount_amount).toFixed(2)}</span>
+                    </div>
+                  )}
+                  {Number(order.shipping_amount) > 0 && (
+                    <div className="flex justify-between text-stone-500">
+                      <span>ค่าจัดส่ง</span>
+                      <span>฿{Number(order.shipping_amount).toFixed(2)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between border-t border-stone-100 pt-2 font-bold text-stone-950">
+                    <span>ยอดรวม</span>
+                    <span>฿{Number(order.total_amount).toFixed(2)}</span>
                   </div>
-                )}
-                <div className="flex justify-between border-t border-stone-200 pt-2 font-semibold text-stone-950">
-                  <span>ยอดรวม ({order.currency})</span>
-                  <span>{Number(order.total_amount).toFixed(2)}</span>
                 </div>
-              </div>
-            </section>
-
-            {/* Notes */}
-            {order.notes && (
-              <section className="rounded-[24px] border border-stone-200 bg-white px-6 py-5 shadow-[0_8px_32px_rgba(28,25,23,0.06)]">
-                <h2 className="mb-2 font-semibold">ข้อความจากลูกค้า</h2>
-                <p className="text-sm leading-7 text-stone-600">{order.notes}</p>
-              </section>
+              </>
             )}
           </div>
 
-          {/* Right column: customer + status */}
-          <div className="flex flex-col gap-6">
-            {/* Customer */}
-            <section className="rounded-[24px] border border-stone-200 bg-white px-6 py-5 shadow-[0_8px_32px_rgba(28,25,23,0.06)]">
-              <h2 className="mb-4 font-semibold">ลูกค้า</h2>
-              <div className="flex items-center gap-3">
-                {customer?.picture_url ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={customer.picture_url}
-                    alt={displayName}
-                    className="h-10 w-10 rounded-full object-cover"
-                  />
-                ) : (
-                  <div className="h-10 w-10 rounded-full bg-stone-200 flex items-center justify-center text-stone-500 text-sm font-medium">
-                    {displayName.slice(0, 1).toUpperCase()}
-                  </div>
-                )}
-                <div>
-                  <p className="text-sm font-medium text-stone-950">
-                    {displayName}
-                  </p>
-                  <p className="text-xs text-stone-500">
-                    {customer?.line_user_id}
-                  </p>
-                </div>
-              </div>
-              <div className="mt-4 text-sm text-stone-600">
-                <p className="text-xs text-stone-400 mb-0.5">วันที่สั่ง</p>
-                <p>{formatDate(order.placed_at)}</p>
-              </div>
-            </section>
+          {/* Notes */}
+          {order.notes && (
+            <div className="rounded-2xl border border-stone-200 bg-white px-6 py-5 shadow-sm">
+              <h2 className="mb-2 font-semibold text-stone-900">
+                ข้อความจากลูกค้า
+              </h2>
+              <p className="text-sm leading-7 text-stone-500">{order.notes}</p>
+            </div>
+          )}
+        </div>
 
-            {/* Change status */}
-            <section className="rounded-[24px] border border-stone-200 bg-white px-6 py-5 shadow-[0_8px_32px_rgba(28,25,23,0.06)]">
-              <h2 className="mb-4 font-semibold">เปลี่ยนสถานะ</h2>
-              <StatusForm orderId={id} currentStatus={order.status} />
-            </section>
+        {/* Right */}
+        <div className="flex flex-col gap-6">
+          {/* Customer */}
+          <div className="rounded-2xl border border-stone-200 bg-white px-6 py-5 shadow-sm">
+            <h2 className="mb-4 font-semibold text-stone-900">ลูกค้า</h2>
+            <div className="flex items-center gap-3">
+              {customer?.picture_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={customer.picture_url}
+                  alt={displayName}
+                  className="h-10 w-10 rounded-full object-cover"
+                />
+              ) : (
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-stone-100 text-sm font-semibold text-stone-500">
+                  {displayName.slice(0, 1).toUpperCase()}
+                </div>
+              )}
+              <div>
+                <p className="font-medium text-stone-900">{displayName}</p>
+                <p className="font-mono text-xs text-stone-400">
+                  {customer?.line_user_id}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Status */}
+          <div className="rounded-2xl border border-stone-200 bg-white px-6 py-5 shadow-sm">
+            <h2 className="mb-4 font-semibold text-stone-900">เปลี่ยนสถานะ</h2>
+            <StatusForm orderId={id} currentStatus={order.status} />
           </div>
         </div>
       </div>
-    </main>
+    </div>
   );
 }
