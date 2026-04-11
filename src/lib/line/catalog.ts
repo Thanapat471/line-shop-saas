@@ -107,3 +107,51 @@ export function buildProductCatalogMessage(products: Product[]): FlexMessage {
 export function parsePostbackData(data: string): Record<string, string> {
   return Object.fromEntries(new URLSearchParams(data));
 }
+
+export function buildLiffCatalogButton(liffId: string): FlexMessage {
+  return {
+    type: "flex",
+    altText: "กดเพื่อดูสินค้าและสั่งซื้อได้เลยค่ะ",
+    contents: {
+      type: "bubble",
+      body: {
+        type: "box",
+        layout: "vertical",
+        spacing: "md",
+        paddingAll: "20px",
+        contents: [
+          {
+            type: "text",
+            text: "🛍 ดูสินค้าของเรา",
+            weight: "bold",
+            size: "lg",
+            color: "#111111",
+          },
+          {
+            type: "text",
+            text: "กดปุ่มด้านล่างเพื่อเลือกสินค้าและสั่งซื้อได้เลยค่ะ",
+            size: "sm",
+            color: "#888888",
+            wrap: true,
+          },
+        ],
+      },
+      footer: {
+        type: "box",
+        layout: "vertical",
+        contents: [
+          {
+            type: "button",
+            style: "primary",
+            color: "#00B900",
+            action: {
+              type: "uri",
+              label: "เปิดร้านค้า",
+              uri: `https://liff.line.me/${liffId}`,
+            },
+          },
+        ],
+      },
+    },
+  };
+}

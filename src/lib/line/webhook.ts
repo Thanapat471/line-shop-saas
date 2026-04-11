@@ -1,7 +1,7 @@
 import { messagingApi, validateSignature } from "@line/bot-sdk";
 import { createAdminSupabaseClient } from "@/lib/supabase/server";
 import { verifySlipWithEasySlip } from "@/lib/easyslip/verify";
-import { sendOrderStatusNotification, sendProductCatalog } from "@/lib/line/push";
+import { sendOrderStatusNotification, sendLiffCatalogButton } from "@/lib/line/push";
 import { parsePostbackData } from "@/lib/line/catalog";
 
 type LineWebhookSource = {
@@ -781,16 +781,8 @@ async function handleCatalogRequests(
 ) {
   if (!lineChannel) return;
 
-  const supabase = createAdminSupabaseClient();
-  const { data: products } = await supabase
-    .from("products")
-    .select("id, name, description, price_amount, image_url")
-    .eq("shop_id", lineChannel.shop_id)
-    .eq("is_active", true)
-    .order("created_at", { ascending: true })
-    .limit(10);
-
-  if (!products || products.length === 0) return;
+  const liffId = process.env.NEXT_PUBLIC_LIFF_ID;
+  if (!liffId) return;
 
   const catalogEvents = events.filter(
     (e) => isTextMessageEvent(e) && isCatalogRequest(e.message?.text ?? ""),
@@ -800,10 +792,10 @@ async function handleCatalogRequests(
     catalogEvents.map((event) => {
       const lineUserId = event.source?.userId;
       if (!lineUserId) return Promise.resolve();
-      return sendProductCatalog({
+      return sendLiffCatalogButton({
         channelAccessToken: lineChannel.channel_access_token,
         lineUserId,
-        products,
+        liffId,
       });
     }),
   );

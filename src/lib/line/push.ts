@@ -1,5 +1,5 @@
 import { messagingApi } from "@line/bot-sdk";
-import { buildProductCatalogMessage } from "./catalog";
+import { buildProductCatalogMessage, buildLiffCatalogButton } from "./catalog";
 
 type Product = {
   id: string;
@@ -80,6 +80,22 @@ export async function sendPaymentQr({
         text: `สแกน QR Code เพื่อชำระเงิน ฿${amount.toLocaleString("th-TH", { minimumFractionDigits: 2 })} สำหรับออเดอร์ #${orderNumber}\n\nหลังชำระแล้วรอการยืนยันจากระบบสักครู่นะคะ`,
       },
     ],
+  });
+}
+
+export async function sendLiffCatalogButton({
+  channelAccessToken,
+  lineUserId,
+  liffId,
+}: {
+  channelAccessToken: string;
+  lineUserId: string;
+  liffId: string;
+}) {
+  const client = makeClient(channelAccessToken);
+  await client.pushMessage({
+    to: lineUserId,
+    messages: [buildLiffCatalogButton(liffId)],
   });
 }
 
