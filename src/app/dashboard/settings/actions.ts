@@ -42,6 +42,7 @@ export async function updateLineChannel(id: string, formData: FormData) {
       channel_secret: formData.get("channel_secret") as string,
       channel_access_token: formData.get("channel_access_token") as string,
       webhook_url: (formData.get("webhook_url") as string) || null,
+      promptpay_number: (formData.get("promptpay_number") as string) || null,
       is_active: formData.get("is_active") === "on",
     })
     .eq("id", id);

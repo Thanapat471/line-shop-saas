@@ -4,13 +4,13 @@ import { useState, useTransition } from "react";
 import { updateOrderStatus } from "./actions";
 
 const ORDER_STATUSES = [
-  "new",
-  "waiting_payment",
-  "paid",
-  "processing",
-  "shipped",
-  "completed",
-  "cancelled",
+  { value: "new", label: "ใหม่" },
+  { value: "waiting_payment", label: "รอชำระ" },
+  { value: "paid", label: "ชำระแล้ว" },
+  { value: "processing", label: "กำลังเตรียม" },
+  { value: "shipped", label: "จัดส่งแล้ว" },
+  { value: "completed", label: "เสร็จสิ้น" },
+  { value: "cancelled", label: "ยกเลิก" },
 ] as const;
 
 export function StatusForm({
@@ -30,24 +30,25 @@ export function StatusForm({
     });
   }
 
+  const changed = status !== currentStatus;
+
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-3">
       <select
-        name="status"
         value={status}
         onChange={(e) => setStatus(e.target.value)}
-        className="rounded-xl border border-stone-300 px-3 py-2 text-sm text-stone-950 outline-none focus:border-stone-900 focus:ring-2 focus:ring-stone-900/10"
+        className="rounded-xl border border-stone-200 bg-stone-50 px-3 py-2.5 text-sm text-stone-900 outline-none transition focus:border-stone-400 focus:bg-white"
       >
         {ORDER_STATUSES.map((s) => (
-          <option key={s} value={s}>
-            {s}
+          <option key={s.value} value={s.value}>
+            {s.label}
           </option>
         ))}
       </select>
       <button
         type="submit"
-        disabled={isPending || status === currentStatus}
-        className="rounded-full bg-stone-950 py-2 text-sm font-medium text-stone-50 transition hover:bg-stone-700 disabled:opacity-40"
+        disabled={isPending || !changed}
+        className="rounded-xl bg-stone-950 py-2.5 text-sm font-semibold text-white transition hover:bg-stone-700 disabled:opacity-40 disabled:cursor-not-allowed"
       >
         {isPending ? "กำลังบันทึก…" : "บันทึก"}
       </button>

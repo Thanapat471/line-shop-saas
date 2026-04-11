@@ -15,9 +15,34 @@ async function getFirstShopId() {
   return data?.id ?? null;
 }
 
+async function uploadProductImage(file: File): Promise<string> {
+  const supabase = createAdminSupabaseClient();
+  const ext = file.name.split(".").pop() ?? "jpg";
+  const fileName = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+
+  const { error } = await supabase.storage
+    .from("product-images")
+    .upload(fileName, file, { contentType: file.type, upsert: false });
+
+  if (error) throw new Error(`อัพโหลดรูปไม่สำเร็จ: ${error.message}`);
+
+  const { data } = supabase.storage
+    .from("product-images")
+    .getPublicUrl(fileName);
+
+  return data.publicUrl;
+}
+
 export async function createProduct(formData: FormData) {
   const shopId = await getFirstShopId();
   if (!shopId) throw new Error("No active shop found");
+
+  const imageFile = formData.get("image") as File | null;
+  let imageUrl: string | null = null;
+
+  if (imageFile && imageFile.size > 0) {
+    imageUrl = await uploadProductImage(imageFile);
+  }
 
   const supabase = createAdminSupabaseClient();
   const { error } = await supabase.from("products").insert({
@@ -30,6 +55,7 @@ export async function createProduct(formData: FormData) {
       ? Number(formData.get("stock_quantity"))
       : null,
     is_active: formData.get("is_active") === "on",
+    image_url: imageUrl,
   });
 
   if (error) throw new Error(error.message);
@@ -38,6 +64,25 @@ export async function createProduct(formData: FormData) {
 
 export async function updateProduct(id: string, formData: FormData) {
   const supabase = createAdminSupabaseClient();
+
+  const imageFile = formData.get("image") as File | null;
+  const clearImage = formData.get("clear_image") === "1";
+
+  // โหลด image_url เดิม
+  const { data: existing } = await supabase
+    .from("products")
+    .select("image_url")
+    .eq("id", id)
+    .single();
+
+  let imageUrl: string | null = existing?.image_url ?? null;
+
+  if (clearImage) {
+    imageUrl = null;
+  } else if (imageFile && imageFile.size > 0) {
+    imageUrl = await uploadProductImage(imageFile);
+  }
+
   const { error } = await supabase
     .from("products")
     .update({
@@ -49,6 +94,7 @@ export async function updateProduct(id: string, formData: FormData) {
         ? Number(formData.get("stock_quantity"))
         : null,
       is_active: formData.get("is_active") === "on",
+      image_url: imageUrl,
     })
     .eq("id", id);
 

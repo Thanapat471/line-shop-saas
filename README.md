@@ -1,4 +1,4 @@
-﻿# LINE Shop SaaS
+# LINE Shop SaaS
 
 LINE Shop SaaS is a multi-tenant order management system for small Thai merchants who sell through LINE Official Account. The goal is to replace manual chat-based order handling with a workflow that captures orders automatically, shows them in a real-time dashboard, and sends status updates back to customers through LINE.
 

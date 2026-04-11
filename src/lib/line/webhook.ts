@@ -1,5 +1,7 @@
 import { messagingApi, validateSignature } from "@line/bot-sdk";
 import { createAdminSupabaseClient } from "@/lib/supabase/server";
+import { verifySlipWithEasySlip } from "@/lib/easyslip/verify";
+import { sendOrderStatusNotification } from "@/lib/line/push";
 
 type LineWebhookSource = {
   type?: string;
@@ -368,6 +370,113 @@ function isTextMessageEvent(event: LineWebhookEvent) {
   return event.type === "message" && event.message?.type === "text";
 }
 
+function isImageMessageEvent(event: LineWebhookEvent) {
+  return event.type === "message" && event.message?.type === "image";
+}
+
+async function downloadLineImage(
+  messageId: string,
+  channelAccessToken: string,
+): Promise<string | null> {
+  try {
+    const res = await fetch(
+      `https://api-data.line.me/v2/bot/message/${messageId}/content`,
+      { headers: { Authorization: `Bearer ${channelAccessToken}` } },
+    );
+    if (!res.ok) return null;
+    const buffer = await res.arrayBuffer();
+    return Buffer.from(buffer).toString("base64");
+  } catch {
+    return null;
+  }
+}
+
+async function handleSlipImages(
+  events: LineWebhookEvent[],
+  lineChannel: LineChannelRecord | null,
+) {
+  if (!lineChannel) return;
+
+  const imageEvents = events.filter(isImageMessageEvent);
+  if (imageEvents.length === 0) return;
+
+  const supabase = createAdminSupabaseClient();
+
+  for (const event of imageEvents) {
+    const lineUserId = event.source?.userId;
+    const messageId = (event.message as { id?: string })?.id;
+    if (!lineUserId || !messageId) continue;
+
+    // โหลด customer จาก lineUserId
+    const { data: customer } = await supabase
+      .from("customers")
+      .select("id")
+      .eq("shop_id", lineChannel.shop_id)
+      .eq("line_user_id", lineUserId)
+      .maybeSingle();
+
+    if (!customer) continue;
+
+    // หา order ที่รอชำระเงินของลูกค้านี้
+    const { data: order } = await supabase
+      .from("orders")
+      .select("id, order_number, total_amount, status")
+      .eq("shop_id", lineChannel.shop_id)
+      .eq("customer_id", customer.id)
+      .eq("status", "waiting_payment")
+      .order("placed_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (!order) continue;
+
+    // ดาวน์โหลดรูป slip จาก LINE
+    const imageBase64 = await downloadLineImage(
+      messageId,
+      lineChannel.channel_access_token,
+    );
+    if (!imageBase64) continue;
+
+    // ส่ง slip ไป EasySlip เพื่อ verify
+    const slipResult = await verifySlipWithEasySlip(imageBase64);
+
+    // ถ้า verify สำเร็จและยอดเงินตรง (±1 บาท)
+    if (
+      slipResult &&
+      Math.abs(slipResult.amount - order.total_amount) <= 1
+    ) {
+      // อัพเดท order → paid
+      await supabase
+        .from("orders")
+        .update({ status: "paid", payment_status: "paid" })
+        .eq("id", order.id);
+
+      await supabase.from("order_status_logs").insert({
+        order_id: order.id,
+        from_status: order.status,
+        to_status: "paid",
+        changed_by_type: "system",
+        notes: `EasySlip verified: ${slipResult.transRef}`,
+      });
+
+      // อัพเดท order_payments ถ้ามี
+      await supabase
+        .from("order_payments")
+        .update({ status: "paid", paid_at: new Date().toISOString() })
+        .eq("order_id", order.id)
+        .eq("status", "pending");
+
+      // แจ้งลูกค้าว่ายืนยันรับ slip แล้ว
+      await sendOrderStatusNotification({
+        channelAccessToken: lineChannel.channel_access_token,
+        lineUserId,
+        orderNumber: order.order_number,
+        newStatus: "paid",
+      });
+    }
+  }
+}
+
 async function fetchShopProducts(shopId: string): Promise<ProductRecord[]> {
   const supabase = createAdminSupabaseClient();
   const { data, error } = await supabase
@@ -686,6 +795,7 @@ export async function processLineWebhook(
       body,
       persisted.lineChannel,
     );
+    await handleSlipImages(body.events, persisted.lineChannel);
     await markWebhookEventsProcessed(persisted.insertedEvents);
     await replyToTextMessageEvents(body.events, persisted.lineChannel);
 

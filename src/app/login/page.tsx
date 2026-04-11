@@ -1,71 +1,88 @@
+"use client";
+
+import { useSearchParams } from "next/navigation";
+import { motion } from "framer-motion";
+import { Zap } from "lucide-react";
 import { login } from "./actions";
+import { Suspense } from "react";
 
-export default function LoginPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ error?: string }>;
-}) {
+function LoginForm() {
+  const searchParams = useSearchParams();
+  const error = searchParams.get("error");
+
   return (
-    <main className="flex min-h-screen items-center justify-center bg-stone-100">
-      <div className="w-full max-w-sm rounded-[28px] border border-stone-200 bg-white p-8 shadow-[0_24px_80px_rgba(28,25,23,0.08)]">
-        <h1 className="mb-6 text-2xl font-semibold tracking-tight text-stone-950">
-          เข้าสู่ระบบ
-        </h1>
+    <motion.div
+      initial={{ opacity: 0, y: 24 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4, ease: [0.25, 0.1, 0.25, 1] }}
+      className="w-full max-w-sm"
+    >
+      {/* Logo */}
+      <div className="mb-8 flex flex-col items-center gap-3">
+        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-green-500 shadow-lg shadow-green-500/30">
+          <Zap size={22} className="text-white" />
+        </div>
+        <div className="text-center">
+          <h1 className="text-xl font-bold text-stone-950">LINE OA Dashboard</h1>
+          <p className="mt-0.5 text-sm text-stone-400">เข้าสู่ระบบเพื่อจัดการร้าน</p>
+        </div>
+      </div>
 
+      {/* Card */}
+      <div className="rounded-2xl border border-stone-200 bg-white p-7 shadow-sm">
         <form action={login} className="flex flex-col gap-4">
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="email" className="text-sm font-medium text-stone-700">
-              อีเมล
-            </label>
+            <label className="text-sm font-medium text-stone-700">อีเมล</label>
             <input
-              id="email"
               name="email"
               type="email"
               required
               autoComplete="email"
-              className="rounded-xl border border-stone-300 px-4 py-2.5 text-sm text-stone-950 outline-none focus:border-stone-900 focus:ring-2 focus:ring-stone-900/10"
+              placeholder="you@example.com"
+              className="rounded-xl border border-stone-200 bg-stone-50 px-4 py-2.5 text-sm text-stone-950 outline-none transition placeholder:text-stone-300 focus:border-stone-400 focus:bg-white focus:ring-0"
             />
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="password" className="text-sm font-medium text-stone-700">
-              รหัสผ่าน
-            </label>
+            <label className="text-sm font-medium text-stone-700">รหัสผ่าน</label>
             <input
-              id="password"
               name="password"
               type="password"
               required
               autoComplete="current-password"
-              className="rounded-xl border border-stone-300 px-4 py-2.5 text-sm text-stone-950 outline-none focus:border-stone-900 focus:ring-2 focus:ring-stone-900/10"
+              placeholder="••••••••"
+              className="rounded-xl border border-stone-200 bg-stone-50 px-4 py-2.5 text-sm text-stone-950 outline-none transition placeholder:text-stone-300 focus:border-stone-400 focus:bg-white focus:ring-0"
             />
           </div>
 
-          <ErrorMessage searchParams={searchParams} />
+          {error && (
+            <motion.p
+              initial={{ opacity: 0, y: -4 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="rounded-xl bg-rose-50 px-4 py-2.5 text-sm text-rose-600"
+            >
+              อีเมลหรือรหัสผ่านไม่ถูกต้อง
+            </motion.p>
+          )}
 
           <button
             type="submit"
-            className="mt-2 rounded-full bg-stone-950 py-2.5 text-sm font-medium text-stone-50 transition hover:bg-stone-700"
+            className="mt-1 rounded-xl bg-stone-950 py-2.5 text-sm font-semibold text-white transition hover:bg-stone-700 active:scale-[0.98]"
           >
             เข้าสู่ระบบ
           </button>
         </form>
       </div>
-    </main>
+    </motion.div>
   );
 }
 
-async function ErrorMessage({
-  searchParams,
-}: {
-  searchParams: Promise<{ error?: string }>;
-}) {
-  const params = await searchParams;
-  if (!params.error) return null;
-
+export default function LoginPage() {
   return (
-    <p className="rounded-xl bg-rose-50 px-4 py-2.5 text-sm text-rose-700">
-      อีเมลหรือรหัสผ่านไม่ถูกต้อง
-    </p>
+    <main className="flex min-h-screen items-center justify-center bg-stone-50 px-4">
+      <Suspense>
+        <LoginForm />
+      </Suspense>
+    </main>
   );
 }

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
 import { createAdminSupabaseClient } from "@/lib/supabase/server";
-import { updateOrderStatus } from "./actions";
+import { PageWrapper } from "@/components/dashboard/PageWrapper";
 import { StatusForm } from "./StatusForm";
 
 export const dynamic = "force-dynamic";
@@ -38,7 +38,6 @@ async function loadOrder(id: string) {
     )
     .eq("id", id)
     .single();
-
   return data;
 }
 
@@ -54,17 +53,16 @@ export default async function OrderDetailPage({
   const customer = Array.isArray(order.customers)
     ? order.customers[0]
     : order.customers;
-
   const displayName =
     customer?.line_display_name ?? customer?.line_user_id ?? "ไม่ทราบชื่อ";
 
   return (
-    <div className="p-8">
+    <PageWrapper>
       {/* Back + title */}
       <div className="mb-8 flex items-center gap-4">
         <Link
           href="/dashboard/orders"
-          className="flex h-9 w-9 items-center justify-center rounded-xl border border-stone-200 bg-white text-stone-500 transition hover:border-stone-400 hover:text-stone-900"
+          className="flex h-9 w-9 items-center justify-center rounded-xl border border-stone-200 bg-white text-stone-400 shadow-sm transition hover:border-stone-300 hover:text-stone-900"
         >
           <ChevronLeft size={18} />
         </Link>
@@ -74,7 +72,7 @@ export default async function OrderDetailPage({
               {order.order_number}
             </h1>
             <span
-              className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_STYLES[order.status] ?? "bg-stone-100 text-stone-600"}`}
+              className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${STATUS_STYLES[order.status] ?? "bg-stone-100 text-stone-600"}`}
             >
               {order.status}
             </span>
@@ -88,20 +86,20 @@ export default async function OrderDetailPage({
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Left */}
         <div className="flex flex-col gap-6 lg:col-span-2">
-          {/* Items */}
+          {/* Items table */}
           <div className="overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm">
             <div className="border-b border-stone-100 px-6 py-4">
               <h2 className="font-semibold text-stone-900">สินค้าในออเดอร์</h2>
             </div>
             {order.order_items.length === 0 ? (
-              <p className="py-10 text-center text-sm text-stone-400">
+              <p className="py-12 text-center text-sm text-stone-400">
                 ไม่มีรายการสินค้า
               </p>
             ) : (
               <>
                 <table className="min-w-full">
                   <thead>
-                    <tr className="border-b border-stone-100 bg-stone-50 text-left text-xs font-medium text-stone-400">
+                    <tr className="border-b border-stone-100 bg-stone-50/80 text-left text-xs font-semibold uppercase tracking-wider text-stone-400">
                       <th className="px-6 py-3">สินค้า</th>
                       <th className="px-6 py-3">SKU</th>
                       <th className="px-6 py-3 text-right">ราคา/ชิ้น</th>
@@ -124,20 +122,21 @@ export default async function OrderDetailPage({
                         <td className="px-6 py-4 text-right text-sm text-stone-600">
                           {item.quantity}
                         </td>
-                        <td className="px-6 py-4 text-right font-semibold text-stone-900">
+                        <td className="px-6 py-4 text-right font-bold text-stone-900">
                           ฿{Number(item.line_total_amount).toFixed(2)}
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
-                <div className="space-y-2 border-t border-stone-100 px-6 py-4 text-sm">
+                {/* Summary */}
+                <div className="space-y-2 border-t border-stone-100 bg-stone-50/50 px-6 py-4 text-sm">
                   <div className="flex justify-between text-stone-500">
                     <span>ยอดสินค้า</span>
                     <span>฿{Number(order.subtotal_amount).toFixed(2)}</span>
                   </div>
                   {Number(order.discount_amount) > 0 && (
-                    <div className="flex justify-between text-rose-600">
+                    <div className="flex justify-between text-rose-500">
                       <span>ส่วนลด</span>
                       <span>-฿{Number(order.discount_amount).toFixed(2)}</span>
                     </div>
@@ -148,7 +147,7 @@ export default async function OrderDetailPage({
                       <span>฿{Number(order.shipping_amount).toFixed(2)}</span>
                     </div>
                   )}
-                  <div className="flex justify-between border-t border-stone-100 pt-2 font-bold text-stone-950">
+                  <div className="flex justify-between border-t border-stone-200 pt-2 text-base font-bold text-stone-950">
                     <span>ยอดรวม</span>
                     <span>฿{Number(order.total_amount).toFixed(2)}</span>
                   </div>
@@ -160,35 +159,37 @@ export default async function OrderDetailPage({
           {/* Notes */}
           {order.notes && (
             <div className="rounded-2xl border border-stone-200 bg-white px-6 py-5 shadow-sm">
-              <h2 className="mb-2 font-semibold text-stone-900">
+              <h2 className="mb-2 text-sm font-semibold text-stone-500 uppercase tracking-wider">
                 ข้อความจากลูกค้า
               </h2>
-              <p className="text-sm leading-7 text-stone-500">{order.notes}</p>
+              <p className="text-sm leading-7 text-stone-700">{order.notes}</p>
             </div>
           )}
         </div>
 
         {/* Right */}
-        <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-5">
           {/* Customer */}
           <div className="rounded-2xl border border-stone-200 bg-white px-6 py-5 shadow-sm">
-            <h2 className="mb-4 font-semibold text-stone-900">ลูกค้า</h2>
+            <h2 className="mb-4 text-sm font-semibold text-stone-500 uppercase tracking-wider">
+              ลูกค้า
+            </h2>
             <div className="flex items-center gap-3">
               {customer?.picture_url ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={customer.picture_url}
                   alt={displayName}
-                  className="h-10 w-10 rounded-full object-cover"
+                  className="h-11 w-11 rounded-full object-cover ring-2 ring-stone-100"
                 />
               ) : (
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-stone-100 text-sm font-semibold text-stone-500">
+                <div className="flex h-11 w-11 items-center justify-center rounded-full bg-stone-100 text-base font-bold text-stone-500">
                   {displayName.slice(0, 1).toUpperCase()}
                 </div>
               )}
               <div>
-                <p className="font-medium text-stone-900">{displayName}</p>
-                <p className="font-mono text-xs text-stone-400">
+                <p className="font-semibold text-stone-900">{displayName}</p>
+                <p className="font-mono text-xs text-stone-400 mt-0.5">
                   {customer?.line_user_id}
                 </p>
               </div>
@@ -197,11 +198,13 @@ export default async function OrderDetailPage({
 
           {/* Status */}
           <div className="rounded-2xl border border-stone-200 bg-white px-6 py-5 shadow-sm">
-            <h2 className="mb-4 font-semibold text-stone-900">เปลี่ยนสถานะ</h2>
+            <h2 className="mb-4 text-sm font-semibold text-stone-500 uppercase tracking-wider">
+              เปลี่ยนสถานะ
+            </h2>
             <StatusForm orderId={id} currentStatus={order.status} />
           </div>
         </div>
       </div>
-    </div>
+    </PageWrapper>
   );
 }

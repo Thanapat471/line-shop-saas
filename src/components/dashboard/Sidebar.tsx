@@ -13,6 +13,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Zap,
+  BarChart2,
+  CreditCard,
 } from "lucide-react";
 import { logout } from "@/app/login/actions";
 
@@ -20,6 +22,8 @@ const NAV_ITEMS = [
   { href: "/dashboard/orders", label: "ออเดอร์", icon: ShoppingBag },
   { href: "/dashboard/products", label: "สินค้า", icon: Package },
   { href: "/dashboard/customers", label: "ลูกค้า", icon: Users },
+  { href: "/dashboard/reports", label: "รายงาน", icon: BarChart2 },
+  { href: "/dashboard/billing", label: "แผนการใช้งาน", icon: CreditCard },
   { href: "/dashboard/settings", label: "ตั้งค่า", icon: Settings },
 ];
 

@@ -35,6 +35,21 @@ export function getServerEnv() {
   };
 }
 
+export function getEasySlipEnv() {
+  return {
+    apiKey: process.env.EASYSLIP_API_KEY ?? "",
+  };
+}
+
+export function getStripeEnv() {
+  return {
+    secretKey: process.env.STRIPE_SECRET_KEY ?? "",
+    publishableKey: process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? "",
+    webhookSecret: process.env.STRIPE_WEBHOOK_SECRET ?? "",
+    priceIdMonthly: process.env.STRIPE_PRICE_ID_MONTHLY ?? "",
+  };
+}
+
 export function getRequiredLineEnv() {
   return {
     lineChannelSecret: readEnv("LINE_CHANNEL_SECRET"),
