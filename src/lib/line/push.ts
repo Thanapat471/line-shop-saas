@@ -87,15 +87,17 @@ export async function sendLiffCatalogButton({
   channelAccessToken,
   lineUserId,
   liffId,
+  channelId,
 }: {
   channelAccessToken: string;
   lineUserId: string;
   liffId: string;
+  channelId: string;
 }) {
   const client = makeClient(channelAccessToken);
   await client.pushMessage({
     to: lineUserId,
-    messages: [buildLiffCatalogButton(liffId)],
+    messages: [buildLiffCatalogButton(liffId, channelId)],
   });
 }
 

@@ -47,8 +47,8 @@ export default function LiffCatalogPage() {
           return;
         }
         const profile = await liff.getProfile();
-        const context = liff.getContext();
-        const chId = (context as { channelId?: string })?.channelId ?? null;
+        const params = new URLSearchParams(window.location.search);
+        const chId = params.get("channelId");
 
         setLineUserId(profile.userId);
         setChannelId(chId);

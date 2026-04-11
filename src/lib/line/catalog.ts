@@ -108,7 +108,7 @@ export function parsePostbackData(data: string): Record<string, string> {
   return Object.fromEntries(new URLSearchParams(data));
 }
 
-export function buildLiffCatalogButton(liffId: string): FlexMessage {
+export function buildLiffCatalogButton(liffId: string, channelId: string): FlexMessage {
   return {
     type: "flex",
     altText: "กดเพื่อดูสินค้าและสั่งซื้อได้เลยค่ะ",
@@ -147,7 +147,7 @@ export function buildLiffCatalogButton(liffId: string): FlexMessage {
             action: {
               type: "uri",
               label: "เปิดร้านค้า",
-              uri: `https://liff.line.me/${liffId}`,
+              uri: `https://liff.line.me/${liffId}?channelId=${channelId}`,
             },
           },
         ],

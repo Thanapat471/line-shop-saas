@@ -33,6 +33,7 @@ export type LineWebhookBody = {
 type LineChannelRecord = {
   id: string;
   shop_id: string;
+  channel_id: string;
   channel_access_token: string;
 };
 
@@ -176,7 +177,7 @@ async function findLineChannelBySecret(secret: string): Promise<LineChannelRecor
   const supabase = createAdminSupabaseClient();
   const { data, error } = await supabase
     .from("line_channels")
-    .select("id, shop_id, channel_access_token")
+    .select("id, shop_id, channel_id, channel_access_token")
     .eq("channel_secret", secret)
     .eq("is_active", true)
     .maybeSingle<LineChannelRecord>();
@@ -796,6 +797,7 @@ async function handleCatalogRequests(
         channelAccessToken: lineChannel.channel_access_token,
         lineUserId,
         liffId,
+        channelId: lineChannel.channel_id,
       });
     }),
   );
