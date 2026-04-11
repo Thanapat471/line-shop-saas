@@ -1,4 +1,13 @@
 import { messagingApi } from "@line/bot-sdk";
+import { buildProductCatalogMessage } from "./catalog";
+
+type Product = {
+  id: string;
+  name: string;
+  description: string | null;
+  price_amount: number;
+  image_url: string | null;
+};
 
 const STATUS_MESSAGES: Record<string, (orderNumber: string) => string> = {
   waiting_payment: (n) =>
@@ -70,6 +79,26 @@ export async function sendPaymentQr({
         type: "text",
         text: `สแกน QR Code เพื่อชำระเงิน ฿${amount.toLocaleString("th-TH", { minimumFractionDigits: 2 })} สำหรับออเดอร์ #${orderNumber}\n\nหลังชำระแล้วรอการยืนยันจากระบบสักครู่นะคะ`,
       },
+    ],
+  });
+}
+
+export async function sendProductCatalog({
+  channelAccessToken,
+  lineUserId,
+  products,
+}: {
+  channelAccessToken: string;
+  lineUserId: string;
+  products: Product[];
+}) {
+  const client = makeClient(channelAccessToken);
+  const catalogMessage = buildProductCatalogMessage(products);
+  await client.pushMessage({
+    to: lineUserId,
+    messages: [
+      { type: "text", text: "นี่คือสินค้าของเราค่ะ กดสั่งซื้อได้เลยนะคะ" },
+      catalogMessage,
     ],
   });
 }

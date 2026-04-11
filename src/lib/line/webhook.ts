@@ -1,7 +1,8 @@
 import { messagingApi, validateSignature } from "@line/bot-sdk";
 import { createAdminSupabaseClient } from "@/lib/supabase/server";
 import { verifySlipWithEasySlip } from "@/lib/easyslip/verify";
-import { sendOrderStatusNotification } from "@/lib/line/push";
+import { sendOrderStatusNotification, sendProductCatalog } from "@/lib/line/push";
+import { parsePostbackData } from "@/lib/line/catalog";
 
 type LineWebhookSource = {
   type?: string;
@@ -763,6 +764,143 @@ export async function createOrderDraftsFromLineMessages(
   return { count: draftsWithItems.length };
 }
 
+const CATALOG_KEYWORDS = ["เมนู", "สินค้า", "ดูของ", "catalog", "menu", "ของมีอะไร", "มีอะไรบ้าง"];
+
+function isCatalogRequest(text: string): boolean {
+  const normalized = text.trim().toLowerCase();
+  return CATALOG_KEYWORDS.some((kw) => normalized.includes(kw));
+}
+
+function isPostbackEvent(event: LineWebhookEvent): boolean {
+  return event.type === "postback";
+}
+
+async function handleCatalogRequests(
+  events: LineWebhookEvent[],
+  lineChannel: LineChannelRecord | null,
+) {
+  if (!lineChannel) return;
+
+  const supabase = createAdminSupabaseClient();
+  const { data: products } = await supabase
+    .from("products")
+    .select("id, name, description, price_amount, image_url")
+    .eq("shop_id", lineChannel.shop_id)
+    .eq("is_active", true)
+    .order("created_at", { ascending: true })
+    .limit(10);
+
+  if (!products || products.length === 0) return;
+
+  const catalogEvents = events.filter(
+    (e) => isTextMessageEvent(e) && isCatalogRequest(e.message?.text ?? ""),
+  );
+
+  await Promise.allSettled(
+    catalogEvents.map((event) => {
+      const lineUserId = event.source?.userId;
+      if (!lineUserId) return Promise.resolve();
+      return sendProductCatalog({
+        channelAccessToken: lineChannel.channel_access_token,
+        lineUserId,
+        products,
+      });
+    }),
+  );
+}
+
+async function handlePostbackEvents(
+  events: LineWebhookEvent[],
+  lineChannel: LineChannelRecord | null,
+) {
+  if (!lineChannel) return;
+
+  const postbacks = events.filter(isPostbackEvent);
+  if (postbacks.length === 0) return;
+
+  const supabase = createAdminSupabaseClient();
+
+  for (const event of postbacks) {
+    const lineUserId = event.source?.userId;
+    const data = (event as { postback?: { data?: string } }).postback?.data;
+    if (!lineUserId || !data) continue;
+
+    const params = parsePostbackData(data);
+    if (params.action !== "order" || !params.productId) continue;
+
+    // โหลด product
+    const { data: product } = await supabase
+      .from("products")
+      .select("id, name, price_amount, sku")
+      .eq("id", params.productId)
+      .eq("shop_id", lineChannel.shop_id)
+      .maybeSingle();
+
+    if (!product) continue;
+
+    // โหลด customer
+    const { data: customer } = await supabase
+      .from("customers")
+      .select("id")
+      .eq("shop_id", lineChannel.shop_id)
+      .eq("line_user_id", lineUserId)
+      .maybeSingle();
+
+    if (!customer) continue;
+
+    // สร้าง order draft
+    const orderNumber = `ORD-${Date.now()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+    const { data: insertedOrder } = await supabase
+      .from("orders")
+      .insert({
+        shop_id: lineChannel.shop_id,
+        customer_id: customer.id,
+        line_channel_id: lineChannel.id,
+        order_number: orderNumber,
+        source: "line_chat",
+        status: "new",
+        payment_status: "pending",
+        fulfillment_status: "unfulfilled",
+        notes: `ลูกค้ากดสั่ง: ${product.name}`,
+        currency: "THB",
+        subtotal_amount: product.price_amount,
+        discount_amount: 0,
+        shipping_amount: 0,
+        total_amount: product.price_amount,
+        placed_at: new Date().toISOString(),
+      })
+      .select("id")
+      .single();
+
+    if (!insertedOrder) continue;
+
+    // สร้าง order_item
+    await supabase.from("order_items").insert({
+      order_id: insertedOrder.id,
+      product_id: product.id,
+      product_name_snapshot: product.name,
+      sku_snapshot: product.sku ?? null,
+      unit_price_amount: product.price_amount,
+      quantity: 1,
+      line_total_amount: product.price_amount,
+    });
+
+    // แจ้งลูกค้า
+    const client = new messagingApi.MessagingApiClient({
+      channelAccessToken: lineChannel.channel_access_token,
+    });
+    await client.pushMessage({
+      to: lineUserId,
+      messages: [
+        {
+          type: "text",
+          text: `รับออเดอร์ ${product.name} แล้วค่ะ ราคา ฿${Number(product.price_amount).toLocaleString("th-TH")}\n\nทีมงานจะติดต่อยืนยันและส่งช่องทางชำระเงินให้เร็วๆ นี้นะคะ`,
+        },
+      ],
+    });
+  }
+}
+
 async function replyToTextMessageEvents(
   events: LineWebhookEvent[],
   lineChannel: LineChannelRecord | null,
@@ -771,9 +909,11 @@ async function replyToTextMessageEvents(
     return;
   }
 
+  // ไม่ตอบ events ที่เป็น catalog request (จะส่ง catalog แทน)
   const replies = events
     .filter(isTextMessageEvent)
     .filter((event) => event.replyToken)
+    .filter((event) => !isCatalogRequest(event.message?.text ?? ""))
     .map((event) => {
       const intent = classifyMessageIntent(event.message!.text!.trim());
       return sendLineReply(event.replyToken!, intent, lineChannel.channel_access_token);
@@ -796,6 +936,8 @@ export async function processLineWebhook(
       persisted.lineChannel,
     );
     await handleSlipImages(body.events, persisted.lineChannel);
+    await handleCatalogRequests(body.events, persisted.lineChannel);
+    await handlePostbackEvents(body.events, persisted.lineChannel);
     await markWebhookEventsProcessed(persisted.insertedEvents);
     await replyToTextMessageEvents(body.events, persisted.lineChannel);
 
