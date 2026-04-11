@@ -112,7 +112,6 @@ export default function LiffCatalogPage() {
       const json = await res.json();
       if (json.ok) {
         setDone(true);
-        // ส่ง message ใน chat แล้วปิดหน้าต่าง
         if (liff.isApiAvailable("sendMessages")) {
           await liff.sendMessages([
             {
@@ -134,116 +133,148 @@ export default function LiffCatalogPage() {
 
   if (error) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-white p-6">
-        <div className="text-center">
-          <p className="text-sm text-red-500">{error}</p>
+      <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-white px-6">
+        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-red-50">
+          <svg className="h-6 w-6 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M12 3a9 9 0 110 18A9 9 0 0112 3z" />
+          </svg>
         </div>
+        <p className="text-sm text-stone-500">{error}</p>
       </div>
     );
   }
 
   if (!ready) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-white">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-green-500 border-t-transparent" />
+      <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-white">
+        <div className="h-9 w-9 animate-spin rounded-full border-[3px] border-green-500 border-t-transparent" />
+        <p className="text-xs text-stone-400">กำลังโหลด...</p>
       </div>
     );
   }
 
   if (done) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-white p-6">
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-white px-6">
+        <div className="flex h-20 w-20 items-center justify-center rounded-full bg-green-50">
+          <svg className="h-10 w-10 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+          </svg>
+        </div>
         <div className="text-center">
-          <div className="mb-3 text-5xl">✓</div>
-          <p className="font-semibold text-stone-900">สั่งซื้อสำเร็จแล้วค่ะ</p>
-          <p className="mt-1 text-sm text-stone-400">กำลังปิดหน้าต่าง...</p>
+          <p className="text-lg font-bold text-stone-900">สั่งซื้อสำเร็จแล้วค่ะ</p>
+          <p className="mt-1 text-sm text-stone-400">กำลังกลับไปที่แชท...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-stone-50 pb-36">
+    <div className="min-h-screen bg-[#f5f5f5]" style={{ paddingBottom: totalItems > 0 ? 100 : 24 }}>
       {/* Header */}
-      <div className="sticky top-0 z-10 border-b border-stone-200 bg-white px-4 py-3">
-        <h1 className="font-bold text-stone-900">สินค้าทั้งหมด</h1>
+      <div className="sticky top-0 z-10 bg-white px-4 py-4 shadow-sm">
+        <div className="flex items-center justify-between">
+          <h1 className="text-base font-bold text-stone-900">เลือกสินค้า</h1>
+          {totalItems > 0 && (
+            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-green-500 text-xs font-bold text-white">
+              {totalItems}
+            </span>
+          )}
+        </div>
       </div>
 
-      {/* Products grid */}
-      <div className="grid grid-cols-2 gap-3 p-4">
-        {products.map((product) => {
-          const inCart = cart.get(product.id);
-          return (
-            <div
-              key={product.id}
-              className="overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm"
-            >
-              {product.image_url ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={product.image_url}
-                  alt={product.name}
-                  className="h-36 w-full object-cover"
-                />
-              ) : (
-                <div className="flex h-36 w-full items-center justify-center bg-stone-100 text-4xl">
-                  🛍
-                </div>
-              )}
-              <div className="p-3">
-                <p className="text-sm font-semibold text-stone-900 leading-snug">{product.name}</p>
-                {product.description && (
-                  <p className="mt-0.5 text-xs text-stone-400 line-clamp-2">{product.description}</p>
+      {/* Products */}
+      {products.length === 0 ? (
+        <div className="flex flex-col items-center justify-center px-6 py-24 text-center">
+          <div className="mb-3 text-5xl">🛍</div>
+          <p className="text-sm text-stone-400">ยังไม่มีสินค้าในขณะนี้</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 gap-3 p-3">
+          {products.map((product) => {
+            const inCart = cart.get(product.id);
+            return (
+              <div
+                key={product.id}
+                className="overflow-hidden rounded-2xl bg-white shadow-sm"
+              >
+                {/* Image */}
+                {product.image_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={product.image_url}
+                    alt={product.name}
+                    className="h-36 w-full object-cover"
+                  />
+                ) : (
+                  <div className="flex h-36 w-full items-center justify-center bg-stone-100 text-4xl">
+                    🍪
+                  </div>
                 )}
-                <p className="mt-1 font-bold text-green-600">
-                  ฿{Number(product.price_amount).toLocaleString("th-TH")}
-                </p>
 
-                {inCart ? (
-                  <div className="mt-2 flex items-center justify-between rounded-xl bg-green-50 px-2 py-1">
-                    <button
-                      onClick={() => removeFromCart(product.id)}
-                      className="flex h-7 w-7 items-center justify-center rounded-full bg-white text-lg font-bold text-stone-600 shadow-sm"
-                    >
-                      −
-                    </button>
-                    <span className="text-sm font-bold text-green-700">{inCart.quantity}</span>
+                {/* Info */}
+                <div className="p-3">
+                  <p className="text-[13px] font-semibold leading-snug text-stone-900">
+                    {product.name}
+                  </p>
+                  {product.description && (
+                    <p className="mt-0.5 line-clamp-2 text-[11px] leading-relaxed text-stone-400">
+                      {product.description}
+                    </p>
+                  )}
+                  <p className="mt-1.5 text-sm font-bold text-green-600">
+                    ฿{Number(product.price_amount).toLocaleString("th-TH")}
+                  </p>
+
+                  {/* Cart controls */}
+                  {inCart ? (
+                    <div className="mt-2.5 flex items-center justify-between rounded-xl bg-green-50 px-1.5 py-1">
+                      <button
+                        onClick={() => removeFromCart(product.id)}
+                        className="flex h-7 w-7 items-center justify-center rounded-lg bg-white text-base font-bold text-stone-500 shadow-sm active:bg-stone-50"
+                      >
+                        −
+                      </button>
+                      <span className="text-sm font-bold text-green-700">{inCart.quantity}</span>
+                      <button
+                        onClick={() => addToCart(product)}
+                        className="flex h-7 w-7 items-center justify-center rounded-lg bg-green-500 text-base font-bold text-white shadow-sm active:bg-green-600"
+                      >
+                        +
+                      </button>
+                    </div>
+                  ) : (
                     <button
                       onClick={() => addToCart(product)}
-                      className="flex h-7 w-7 items-center justify-center rounded-full bg-green-500 text-lg font-bold text-white shadow-sm"
+                      className="mt-2.5 w-full rounded-xl bg-green-500 py-2 text-xs font-bold text-white active:bg-green-600"
                     >
-                      +
+                      เพิ่มลงตะกร้า
                     </button>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => addToCart(product)}
-                    className="mt-2 w-full rounded-xl bg-green-500 py-1.5 text-sm font-semibold text-white"
-                  >
-                    เพิ่มลงตะกร้า
-                  </button>
-                )}
+                  )}
+                </div>
               </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* Cart bar */}
       {totalItems > 0 && (
-        <div className="fixed bottom-0 left-0 right-0 border-t border-stone-200 bg-white p-4 shadow-lg">
-          <div className="mb-2 flex justify-between text-sm text-stone-500">
-            <span>{totalItems} รายการ</span>
-            <span className="font-bold text-stone-900">
-              ฿{totalAmount.toLocaleString("th-TH")}
-            </span>
-          </div>
+        <div className="fixed bottom-0 left-0 right-0 bg-white px-4 pb-6 pt-3 shadow-[0_-4px_20px_rgba(0,0,0,0.08)]">
           <button
             onClick={handleSubmit}
             disabled={submitting}
-            className="w-full rounded-2xl bg-green-500 py-3 text-sm font-bold text-white disabled:opacity-50"
+            className="flex w-full items-center justify-between rounded-2xl bg-green-500 px-5 py-3.5 disabled:opacity-60 active:bg-green-600"
           >
-            {submitting ? "กำลังส่งออเดอร์..." : "ยืนยันสั่งซื้อ"}
+            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-green-400 text-xs font-bold text-white">
+              {totalItems}
+            </span>
+            <span className="text-sm font-bold text-white">
+              {submitting ? "กำลังส่งออเดอร์..." : "ยืนยันสั่งซื้อ"}
+            </span>
+            <span className="text-sm font-bold text-green-100">
+              ฿{totalAmount.toLocaleString("th-TH")}
+            </span>
           </button>
         </div>
       )}
