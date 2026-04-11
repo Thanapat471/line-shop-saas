@@ -7,7 +7,7 @@ export function getStripe(): Stripe {
   if (!_stripe) {
     const { secretKey } = getStripeEnv();
     if (!secretKey) throw new Error("STRIPE_SECRET_KEY ยังไม่ได้ตั้งค่า");
-    _stripe = new Stripe(secretKey, { apiVersion: "2025-03-31.basil" });
+    _stripe = new Stripe(secretKey, { apiVersion: "2026-03-25.dahlia" });
   }
   return _stripe;
 }

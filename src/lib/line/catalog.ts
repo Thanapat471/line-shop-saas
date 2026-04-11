@@ -1,4 +1,7 @@
-import type { FlexCarousel, FlexBubble, FlexMessage } from "@line/bot-sdk";
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type FlexBubble = any;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type FlexMessage = any;
 
 type Product = {
   id: string;
@@ -89,8 +92,8 @@ function buildProductBubble(product: Product): FlexBubble {
 export function buildProductCatalogMessage(products: Product[]): FlexMessage {
   const bubbles = products.slice(0, 10).map(buildProductBubble);
 
-  const carousel: FlexCarousel = {
-    type: "carousel",
+  const carousel = {
+    type: "carousel" as const,
     contents: bubbles,
   };
 

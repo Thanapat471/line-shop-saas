@@ -46,7 +46,7 @@ export function SalesChart({ data }: { data: DayStat[] }) {
           width={72}
         />
         <Tooltip
-          formatter={(value: number) => [formatBaht(value), "ยอดขาย"]}
+          formatter={(value) => [formatBaht(Number(value ?? 0)), "ยอดขาย"]}
           labelStyle={{ color: "#1c1917", fontWeight: 600 }}
           contentStyle={{
             borderRadius: 12,

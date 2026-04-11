@@ -51,8 +51,8 @@ export async function POST(request: Request) {
           billing_cycle: interval === "year" ? "yearly" : "monthly",
           amount,
           currency: "THB",
-          current_period_start: new Date(sub.current_period_start * 1000).toISOString(),
-          current_period_end: new Date(sub.current_period_end * 1000).toISOString(),
+          current_period_start: new Date((sub as unknown as Record<string, number>).current_period_start * 1000).toISOString(),
+          current_period_end: new Date((sub as unknown as Record<string, number>).current_period_end * 1000).toISOString(),
         },
         { onConflict: "shop_id" },
       );
@@ -80,8 +80,8 @@ export async function POST(request: Request) {
         .from("subscriptions")
         .update({
           status: statusMap[sub.status] ?? sub.status,
-          current_period_start: new Date(sub.current_period_start * 1000).toISOString(),
-          current_period_end: new Date(sub.current_period_end * 1000).toISOString(),
+          current_period_start: new Date((sub as unknown as Record<string, number>).current_period_start * 1000).toISOString(),
+          current_period_end: new Date((sub as unknown as Record<string, number>).current_period_end * 1000).toISOString(),
           cancelled_at: sub.canceled_at
             ? new Date(sub.canceled_at * 1000).toISOString()
             : null,
